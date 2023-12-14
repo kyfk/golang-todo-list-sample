@@ -1,0 +1,51 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {} # support manual runs
+permissions:
+  contents: read
+jobs:
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Install bazelisk
+        uses: bazelbuild/setup-bazelisk@v2
+      - name: Mount bazel cache
+        uses: actions/cache@v3
+        with:
+          path: "~/.cache/bazel"
+          key: bazel
+      - name: Install go
+        uses: actions/setup-go@v4
+        with:
+          go-version: stable
+          cache-dependency-path: go.work.sum
+      - name: Install buf
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ github.token }}
+      - name: Buf format
+        run: buf format -d --exit-code
+      - name: Buf lint
+        uses: bufbuild/buf-lint-action@v1
+      - name: Buf breaking change detection
+        uses: bufbuild/buf-breaking-action@v1
+        with:
+          against: https://github.com/bufbuild/protovalidate.git#branch=main
+      - name: Buf generate
+        run: |
+          mkdir -p .tmp/bin
+          cp $(which buf) .tmp/bin/buf
+          make checkgenerate
+      - name: Test
+        run: make test
+      - name: Lint
+        run: make lint-go
